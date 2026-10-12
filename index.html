@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero EMICRON</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-0: #f4f4f2; --surface-1: #fcfcfb; --border: #e4e3df;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --grid: #e4e3df; --accent: #2a78d6;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948; --otros: #8f8e89;
+    --aviso-bg: #fff4d6; --aviso-text: #6b4e00; --error-bg: #fdecec; --error-text: #9b1c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-0: #111110; --surface-1: #1a1a19; --border: #33322f;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --grid: #33322f; --accent: #3987e5;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --otros: #8a8984;
+      --aviso-bg: #3a2f10; --aviso-text: #ffd98a; --error-bg: #3a1616; --error-text: #ffb4b4;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-0: #111110; --surface-1: #1a1a19; --border: #33322f;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --grid: #33322f; --accent: #3987e5;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767; --otros: #8a8984;
+    --aviso-bg: #3a2f10; --aviso-text: #ffd98a; --error-bg: #3a1616; --error-text: #ffb4b4;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary); font: 15px/1.5 Arial, Helvetica, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0 0 20px; }
+
+  #zona { border: 2px dashed var(--border); border-radius: 12px; background: var(--surface-1);
+    padding: 36px 16px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #zona:hover, #zona:focus-visible { border-color: var(--accent); outline: none; }
+  #zona.arrastrando { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface-1)); }
+  #zona strong { font-size: 17px; display: block; margin-bottom: 4px; }
+  #zona span { color: var(--text-secondary); font-size: 14px; }
+  #zona.compacta { padding: 12px 16px; }
+  #zona.compacta strong { font-size: 15px; display: inline; margin: 0 8px 0 0; }
+  #archivo { display: none; }
+
+  .mensaje { display: none; margin-top: 12px; padding: 10px 14px; border-radius: 8px; }
+  #error { background: var(--error-bg); color: var(--error-text); }
+  #aviso { background: var(--aviso-bg); color: var(--aviso-text); }
+
+  #tablero { display: none; margin-top: 16px; }
+  #formato { color: var(--text-secondary); font-size: 14px; margin: 0 0 12px; }
+  #formato b { color: var(--text-primary); }
+  #controles { display: flex; flex-wrap: wrap; gap: 12px 16px; margin-bottom: 16px; }
+  #controles:empty { display: none; }
+  #controles label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-secondary); min-width: 0; }
+  #controles select { font: 14px Arial, sans-serif; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); max-width: 100%; }
+  #controles label.ancho { flex: 1 1 360px; }
+  #controles label.ancho select { width: 100%; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; min-width: 0; }
+  .kpi .valor { font-size: 22px; font-weight: bold; overflow-wrap: anywhere; }
+  .kpi .etiqueta { color: var(--text-secondary); font-size: 13px; }
+
+  .rejilla { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .tarjeta { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 14px 6px; min-width: 0; }
+  .tarjeta h2 { font-size: 16px; margin: 0 0 2px; }
+  .tarjeta p { color: var(--text-secondary); font-size: 13px; margin: 0 0 4px; min-height: 1.5em; }
+  .grafico { width: 100%; height: 360px; }
+  .vacio { display: flex; align-items: center; justify-content: center; height: 360px; color: var(--text-secondary);
+    text-align: center; padding: 0 24px; font-size: 14px; }
+  .pie { color: var(--text-secondary); font-size: 12px; margin-top: 16px; }
+
+  @media (max-width: 760px) {
+    .rejilla { grid-template-columns: 1fr; }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tablero EMICRON</h1>
+  <p class="sub">Carga cualquier CSV: el tablero reconoce el formato y adapta los gráficos. Los datos se procesan en tu navegador; no se envían a ningún servidor.</p>
+
+  <div id="zona" tabindex="0" role="button" aria-label="Cargar archivo CSV">
+    <strong>Arrastra y suelta aquí un archivo CSV</strong>
+    <span>o haz clic para elegirlo. Reconoce datos_emicron.csv, emicron_2024_frecuencias.csv, emicron_2024_economico.csv y cualquier otra tabla.</span>
+  </div>
+  <input type="file" id="archivo" accept=".csv,.txt,text/csv">
+  <div id="error" class="mensaje" role="alert"></div>
+  <div id="aviso" class="mensaje" role="status"></div>
+
+  <section id="tablero" aria-live="polite">
+    <p id="formato"></p>
+    <div id="controles"></div>
+    <div class="kpis" id="kpis"></div>
+    <div class="rejilla">
+      <div class="tarjeta"><h2 id="t1"></h2><p id="s1"></p><div class="grafico" id="g1"></div></div>
+      <div class="tarjeta"><h2 id="t2"></h2><p id="s2"></p><div class="grafico" id="g2"></div></div>
+      <div class="tarjeta"><h2 id="t3"></h2><p id="s3"></p><div class="grafico" id="g3"></div></div>
+      <div class="tarjeta"><h2 id="t4"></h2><p id="s4"></p><div class="grafico" id="g4"></div></div>
+    </div>
+    <p class="pie" id="pie"></p>
+  </section>
+</main>
+
+<script>
+(() => {
+  // =====================================================================
+  // Estado y utilidades
+  // =====================================================================
+  const $ = (id) => document.getElementById(id);
+  const zona = $("zona"), input = $("archivo");
+  const E = { filas: [], cols: [], tipo: null, nombre: "", sel: {} };
+
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const PALETA = () => ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"].map(css);
+  const fmt = (x, d = 2) => Number.isFinite(x)
+    ? x.toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d }) : "–";
+  const entero = (x) => Number.isFinite(x) ? Math.round(x).toLocaleString("es-CO") : "–";
+  const media = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  const mediana = (a) => { const s = [...a].sort((x, y) => x - y), m = s.length >> 1;
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const unicos = (a) => [...new Set(a)];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const CORTOS = {
+    "Agricultura, ganadería, caza, silvicultura y pesca": "Agropecuario",
+    "Industria manufacturera (1)": "Industria manufacturera",
+    "Comercio y reparación de vehículos automotores y motocicletas": "Comercio y reparación de vehículos",
+    "Actividades financieras y de seguros, inmobiliarias, profesionales y servicios administrativos": "Financieras, inmobiliarias y profesionales",
+    "Actividades de atención a la salud humana y de asistencia social": "Salud y asistencia social",
+    "Actividades artísticas, de entretenimiento, de recreación y otras actividades de servicios": "Artísticas y otros servicios",
+    "Centros poblados y rural disperso": "Centros poblados y rural",
+  };
+  const corto = (s, n = 34) => { s = CORTOS[s] || s; return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s; };
+  const vacio = (v) => v === null || v === undefined || String(v).trim() === "";
+
+  function numero(v) {
+    if (typeof v === "number") return v;
+    let t = String(v ?? "").trim().replace(/\s/g, "").replace(/^\$/, "").replace(/%$/, "");
+    if (!t) return NaN;
+    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, "").replace(",", ".");      // 1.500.000,5
+    else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, "");                     // 1,500,000.5
+    else t = t.replace(",", ".");                                                                 // 1500000,5
+    return /^-?(\d+\.?\d*|\.\d+)(e-?\d+)?$/i.test(t) ? Number(t) : NaN;
+  }
+  const siNo = (v) => {
+    const t = String(v ?? "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return ["si", "s", "yes", "true"].includes(t) ? "Sí" : ["no", "n", "false"].includes(t) ? "No" : null;
+  };
+  const mostrar = (id, msg) => { $(id).textContent = msg || ""; $(id).style.display = msg ? "block" : "none"; };
+
+  // =====================================================================
+  // Carga del archivo
+  // =====================================================================
+  function leer(archivo) {
+    if (!archivo) return;
+    mostrar("error", ""); mostrar("aviso", "");
+    E.nombre = archivo.name;
+    Papa.parse(archivo, {
+      header: true, skipEmptyLines: "greedy", delimitersToGuess: [",", ";", "\t", "|"],
+      transformHeader: (h) => h.replace(/^﻿/, "").trim(),
+      complete: procesar,
+      error: (err) => mostrar("error", "No se pudo leer el archivo: " + err.message),
+    });
+  }
+
+  function procesar(res) {
+    const cols = (res.meta.fields || []).filter((c) => c !== "");
+    const filas = res.data.filter((r) => cols.some((c) => !vacio(r[c])));
+    if (!cols.length || !filas.length) { mostrar("error", "El archivo está vacío o no tiene encabezados."); return; }
+    E.cols = cols; E.filas = filas; E.sel = {};
+    E.tipo = detectar(cols);
+    zona.classList.add("compacta");
+    zona.querySelector("strong").textContent = `Archivo cargado: ${E.nombre}`;
+    zona.querySelector("span").textContent = "Suelta otro CSV o haz clic para cambiarlo";
+    $("tablero").style.display = "block";
+    MODOS[E.tipo].preparar();
+    dibujar();
+  }
+
+  function detectar(cols) {
+    const tiene = (...c) => c.every((x) => cols.includes(x));
+    if (tiene("cuadro", "categoria", "dominio", "porcentaje")) return "frecuencias";
+    if (tiene("agrupacion", "dominio", "micronegocios", "ventas_promedio_mes_millones")) return "economico";
+    return "general";
+  }
+
+  // =====================================================================
+  // Plotly: estilo común
+  // =====================================================================
+  const CONFIG = { responsive: true, displaylogo: false, modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d"] };
+  function eje(titulo, extra = {}) {
+    return { gridcolor: css("--grid"), zeroline: false, linecolor: css("--grid"), automargin: true,
+      tickfont: { color: css("--text-secondary") }, title: { text: titulo || "", font: { color: css("--text-secondary") } }, ...extra };
+  }
+  function layout(extra = {}) {
+    return { paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", separators: ",.",
+      font: { family: "Arial, Helvetica, sans-serif", size: 12, color: css("--text-primary") },
+      margin: { l: 10, r: 24, t: 10, b: 10 }, hoverlabel: { font: { family: "Arial", size: 12 } },
+      legend: { orientation: "h", y: 1.1, x: 0, font: { color: css("--text-primary") } },
+      xaxis: eje(), yaxis: eje(), ...extra };
+  }
+  const textoBarra = () => ({ color: css("--text-primary"), size: 11 });
+
+  function tarjeta(n, titulo, subtitulo) { $("t" + n).textContent = titulo; $("s" + n).textContent = subtitulo || ""; }
+  function grafico(n, trazas, lay) {
+    const div = $("g" + n);
+    if (div.classList.contains("vacio")) { div.classList.remove("vacio"); div.textContent = ""; }
+    Plotly.react(div, trazas, lay, CONFIG);
+  }
+  function sinGrafico(n, msg) {
+    const div = $("g" + n); Plotly.purge(div); div.classList.add("vacio"); div.textContent = msg;
+  }
+  // Barras horizontales (etiquetas largas): categorías de arriba hacia abajo en el orden dado
+  function barrasH(n, cats, vals, { color, texto, hover, ejeX, error, rango, posTexto = "outside" } = {}) {
+    const alto = Math.max(360, 26 * cats.length + 90);
+    $("g" + n).style.height = alto + "px";
+    grafico(n, [{
+      type: "bar", orientation: "h", y: cats.map((c) => corto(c)), x: vals, marker: { color: color || css("--s1") },
+      text: texto, textposition: posTexto, cliponaxis: false, textfont: textoBarra(),
+      insidetextfont: { color: "#ffffff", size: 11 }, customdata: cats, hovertemplate: hover, error_x: error,
+    }], layout({
+      yaxis: eje("", { autorange: "reversed", gridcolor: "rgba(0,0,0,0)" }),
+      xaxis: eje(ejeX, { range: rango }), bargap: 0.35,
+    }));
+  }
+  function kpis(lista) {
+    $("kpis").innerHTML = lista.map(([v, e]) =>
+      `<div class="kpi"><div class="valor">${esc(v)}</div><div class="etiqueta">${esc(e)}</div></div>`).join("");
+  }
+  function control(id, etiqueta, opciones, valor, ancho = false) {
+    const ops = opciones.map(([v, t]) => `<option value="${esc(v)}"${v === valor ? " selected" : ""}>${esc(t)}</option>`).join("");
+    return `<label class="${ancho ? "ancho" : ""}">${esc(etiqueta)}<select id="${id}">${ops}</select></label>`;
+  }
+  function enlazar(ids) {
+    ids.forEach((id) => $(id).addEventListener("change", (e) => { E.sel[id] = e.target.value; dibujar(); }));
+  }
+  function resetAlturas() { [1, 2, 3, 4].forEach((n) => ($("g" + n).style.height = "")); }
+
+  // =====================================================================
+  // MODO 1: frecuencias del anexo (formato largo)
+  // =====================================================================
+  const frecuencias = {
+    preparar() {
+      const F = E.filas.map((r) => ({
+        cuadro: String(r.cuadro ?? "").trim(), variable: String(r.variable ?? "").trim(),
+        subgrupo: String(r.subgrupo ?? "").trim(), categoria: String(r.categoria ?? "").trim(),
+        tipo: String(r.tipo_pregunta ?? "").trim(), dominio: String(r.dominio ?? "").trim(),
+        n: numero(r.micronegocios), base: numero(r.base), pct: numero(r.porcentaje), cv: numero(r.cv_cantidad),
+      })).filter((r) => r.cuadro && r.categoria && r.dominio && Number.isFinite(r.pct));
+      F.forEach((r) => (r.clave = r.cuadro + "|" + r.subgrupo));
+      E.F = F;
+      E.vars = unicos(F.map((r) => r.clave)).map((k) => {
+        const r = F.find((x) => x.clave === k);
+        return [k, `${r.cuadro} · ${r.variable}${r.subgrupo ? " — " + r.subgrupo : ""}`];
+      });
+      E.doms = unicos(F.map((r) => r.dominio));
+      E.sel.fVar = E.vars.find(([k]) => k.startsWith("G.9|"))?.[0] || E.vars[0][0];
+      E.sel.fDom = E.doms.includes("Total nacional") ? "Total nacional" : E.doms[0];
+      $("formato").innerHTML = `Formato detectado: <b>frecuencias del anexo DANE</b> — ${E.vars.length} variables, ${E.doms.length} dominios, ${entero(F.length)} filas.`;
+      $("controles").innerHTML = control("fVar", "Variable", E.vars, E.sel.fVar, true) +
+        control("fDom", "Dominio", E.doms.map((d) => [d, d]), E.sel.fDom);
+      enlazar(["fVar", "fDom"]);
+    },
+    dibujar() {
+      resetAlturas();
+      const filasVar = E.F.filter((r) => r.clave === E.sel.fVar);
+      const cats = unicos(filasVar.map((r) => r.categoria));
+      const de = (dom) => cats.map((c) => filasVar.find((r) => r.categoria === c && r.dominio === dom));
+      const sel = de(E.sel.fDom);
+      const multiple = filasVar[0]?.tipo === "Múltiple";
+      const nombreVar = E.vars.find(([k]) => k === E.sel.fVar)[1];
+
+      const validos = sel.filter(Boolean);
+      const moda = validos.reduce((a, b) => (b.pct > a.pct ? b : a), validos[0]);
+      kpis([
+        [entero(validos[0]?.base), `Micronegocios en el universo (${E.sel.fDom})`],
+        [corto(moda?.categoria || "–", 30), "Categoría más frecuente (moda)"],
+        [fmt(moda?.pct, 1) + " %", "Porcentaje de la moda"],
+        [String(cats.length), multiple ? "Opciones (respuesta múltiple)" : "Categorías"],
+      ]);
+
+      tarjeta(1, "Porcentaje de micronegocios por categoría", `${nombreVar} · ${E.sel.fDom}` +
+        (multiple ? " · respuesta múltiple: no suma 100 %" : ""));
+      barrasH(1, cats, sel.map((r) => r?.pct ?? null), {
+        texto: sel.map((r) => (r ? fmt(r.pct, 1) + " %" : "")), ejeX: "% de micronegocios",
+        rango: [0, Math.max(...sel.map((r) => r?.pct || 0)) * 1.2],
+        hover: "<b>%{customdata}</b><br>%{x:.1f} %<extra></extra>",
+      });
+
+      const zonas = E.doms.filter((d) => d !== "Total nacional");
+      tarjeta(2, "Comparación por dominio", zonas.length ? zonas.join(" frente a ") : "");
+      if (zonas.length >= 1) {
+        const col = PALETA();
+        $("g2").style.height = Math.max(360, 40 * cats.length + 90) + "px";
+        grafico(2, zonas.map((z, i) => {
+          const v = de(z);
+          return { type: "bar", orientation: "h", name: z, y: cats.map((c) => corto(c)), x: v.map((r) => r?.pct ?? null),
+            marker: { color: col[i % 8] }, customdata: cats,
+            text: v.map((r) => (r ? fmt(r.pct, 1) + " %" : "")), textposition: "outside", cliponaxis: false, textfont: textoBarra(),
+            hovertemplate: `<b>%{customdata}</b><br>${esc(z)}: %{x:.1f} %<extra></extra>` };
+        }), layout({ barmode: "group", bargap: 0.3, bargroupgap: 0.08,
+          yaxis: eje("", { autorange: "reversed", gridcolor: "rgba(0,0,0,0)" }), xaxis: eje("% de micronegocios"),
+          legend: { orientation: "h", y: 1.02, yanchor: "bottom", x: 0, traceorder: "normal", font: { color: css("--text-primary") } },
+          margin: { l: 10, r: 24, t: 30, b: 10 } }));
+      } else sinGrafico(2, "El archivo solo tiene un dominio.");
+
+      const cab = E.doms.find((d) => /cabecera/i.test(d)), rur = E.doms.find((d) => /rural/i.test(d));
+      tarjeta(3, "Brecha rural − cabecera", "Puntos porcentuales: positivo = más frecuente en la zona rural");
+      if (cab && rur) {
+        const a = de(cab), b = de(rur);
+        const br = cats.map((_, i) => (a[i] && b[i] ? b[i].pct - a[i].pct : null));
+        const [cCab, cRur] = PALETA();
+        barrasH(3, cats, br, {
+          color: br.map((v) => (v >= 0 ? cRur : cCab)),
+          texto: br.map((v) => (v === null ? "" : (v > 0 ? "+" : "") + fmt(v, 1))), ejeX: "Puntos porcentuales", posTexto: "auto",
+          hover: "<b>%{customdata}</b><br>Brecha: %{x:+.1f} p.p.<extra></extra>",
+        });
+        Plotly.relayout("g3", { shapes: [{ type: "line", x0: 0, x1: 0, yref: "paper", y0: 0, y1: 1, line: { color: css("--text-secondary"), width: 1 } }] });
+      } else sinGrafico(3, "Se necesitan los dominios de cabeceras y rural para calcular la brecha.");
+
+      tarjeta(4, "Precisión de las estimaciones", `Coeficiente de variación del DANE (%) · ${E.sel.fDom}. Líneas: 5 %, 10 % y 15 %`);
+      if (sel.some((r) => r && Number.isFinite(r.cv))) {
+        const cv = sel.map((r) => (r && Number.isFinite(r.cv) ? r.cv : null));
+        const nivel = (v) => (v < 5 ? "alta" : v < 10 ? "buena" : v < 15 ? "aceptable" : "baja");
+        barrasH(4, cats, cv, {
+          color: css("--otros"), texto: cv.map((v) => (v === null ? "" : fmt(v, 1) + " %")), ejeX: "C.v (%)",
+          rango: [0, Math.max(16, ...cv.filter((v) => v !== null)) * 1.18],
+          hover: cv.map((v) => `<b>%{customdata}</b><br>C.v: %{x:.1f} % (precisión ${v === null ? "n.d." : nivel(v)})<extra></extra>`),
+        });
+        Plotly.relayout("g4", { shapes: [5, 10, 15].map((x) => ({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1,
+          line: { color: css("--text-secondary"), width: 1, dash: "dot" } })) });
+      } else sinGrafico(4, "El archivo no trae coeficientes de variación.");
+
+      $("pie").textContent = `Fuente: ${E.nombre}. Porcentajes sobre el universo de cada pregunta (columna base).`;
+    },
+  };
+
+  // =====================================================================
+  // MODO 2: resumen económico (cuadros I.1–I.3)
+  // =====================================================================
+  const economico = {
+    preparar() {
+      const num = ["micronegocios", "personal_ocupado_promedio", "ventas_promedio_mes_millones", "ventas_promedio_mes_li95",
+        "ventas_promedio_mes_ls95", "consumo_intermedio_promedio_mes_millones", "valor_agregado_promedio_mes_millones",
+        "ingreso_mixto_promedio_mes_millones", "cv_ventas_promedio"];
+      E.R = E.filas.map((r) => {
+        const o = { agrupacion: String(r.agrupacion ?? "").trim(), dominio: String(r.dominio ?? "").trim(),
+          precision: String(r.precision_ventas_promedio ?? "").trim() };
+        num.forEach((c) => (o[c] = numero(r[c])));
+        return o;
+      }).filter((r) => r.dominio && Number.isFinite(r.ventas_promedio_mes_millones));
+      E.total = E.R.find((r) => r.agrupacion === "Total" || r.dominio === "Total nacional");
+      const grupos = unicos(E.R.filter((r) => r !== E.total).map((r) => r.agrupacion));
+      E.sel.eGrupo = grupos.includes("Actividad económica") ? "Actividad económica" : grupos[0];
+      $("formato").innerHTML = `Formato detectado: <b>resumen económico del anexo DANE</b> — ${E.R.length} dominios en ${grupos.length} agrupaciones.`;
+      $("controles").innerHTML = control("eGrupo", "Agrupar por", grupos.map((g) => [g, g]), E.sel.eGrupo);
+      enlazar(["eGrupo"]);
+    },
+    dibujar() {
+      resetAlturas();
+      const T = E.total, G = E.R.filter((r) => r.agrupacion === E.sel.eGrupo);
+      const conIC = G.every((r) => Number.isFinite(r.ventas_promedio_mes_li95) && Number.isFinite(r.ventas_promedio_mes_ls95));
+      const totalNeg = T?.micronegocios ?? G.reduce((s, r) => s + r.micronegocios, 0);
+
+      kpis([
+        [entero(totalNeg), "Micronegocios (total nacional)"],
+        [T ? "$" + fmt(T.ventas_promedio_mes_millones) : "–", "Ventas promedio del mes (millones)" +
+          (T && Number.isFinite(T.ventas_promedio_mes_li95) ? ` · IC 95 %: ${fmt(T.ventas_promedio_mes_li95)}–${fmt(T.ventas_promedio_mes_ls95)}` : "")],
+        [T ? fmt(T.personal_ocupado_promedio) : "–", "Personas ocupadas por micronegocio"],
+        [T && Number.isFinite(T.ingreso_mixto_promedio_mes_millones) ? "$" + fmt(T.ingreso_mixto_promedio_mes_millones) : "–",
+          "Ingreso mixto promedio del mes (millones)"],
+      ]);
+
+      const porV = [...G].sort((a, b) => b.ventas_promedio_mes_millones - a.ventas_promedio_mes_millones);
+      tarjeta(1, "Ventas promedio por micronegocio", `Millones de pesos al mes según ${E.sel.eGrupo.toLowerCase()}` +
+        (conIC ? " · barras de error: IC 95 %" : ""));
+      barrasH(1, porV.map((r) => r.dominio), porV.map((r) => r.ventas_promedio_mes_millones), {
+        texto: porV.map((r) => "$" + fmt(r.ventas_promedio_mes_millones)), ejeX: "Millones de pesos al mes",
+        error: conIC ? { type: "data", symmetric: false, color: css("--text-primary"), thickness: 1.5, width: 5,
+          array: porV.map((r) => r.ventas_promedio_mes_ls95 - r.ventas_promedio_mes_millones),
+          arrayminus: porV.map((r) => r.ventas_promedio_mes_millones - r.ventas_promedio_mes_li95) } : undefined,
+        rango: [0, Math.max(...porV.map((r) => (conIC ? r.ventas_promedio_mes_ls95 : r.ventas_promedio_mes_millones))) * 1.22],
+        hover: conIC
+          ? porV.map((r) => `<b>%{customdata}</b><br>Promedio: $%{x:,.2f} millones<br>IC 95 %: ${fmt(r.ventas_promedio_mes_li95)} – ${fmt(r.ventas_promedio_mes_ls95)}<br>Precisión: ${esc(r.precision || "n.d.")}<extra></extra>`)
+          : "<b>%{customdata}</b><br>Promedio: $%{x:,.2f} millones<extra></extra>",
+      });
+      if (conIC) {   // la etiqueta va después del bigote superior
+        Plotly.restyle("g1", { text: [porV.map((r) => "$" + fmt(r.ventas_promedio_mes_millones))], textposition: "none" });
+        Plotly.relayout("g1", { annotations: porV.map((r) => ({ x: r.ventas_promedio_mes_ls95, y: corto(r.dominio), xanchor: "left",
+          xshift: 6, showarrow: false, text: "$" + fmt(r.ventas_promedio_mes_millones), font: textoBarra() })) });
+      }
+
+      const porN = [...G].sort((a, b) => b.micronegocios - a.micronegocios);
+      const pct = porN.map((r) => (100 * r.micronegocios) / totalNeg);
+      tarjeta(2, "Participación en el número de micronegocios", `% del total nacional según ${E.sel.eGrupo.toLowerCase()}`);
+      barrasH(2, porN.map((r) => r.dominio), pct, {
+        texto: pct.map((v) => fmt(v, 1) + " %"), ejeX: "% de micronegocios", rango: [0, Math.max(...pct) * 1.2],
+        hover: porN.map((r) => `<b>%{customdata}</b><br>%{x:.1f} % del total<br>${entero(r.micronegocios)} micronegocios<extra></extra>`),
+      });
+
+      tarjeta(3, "Personal ocupado y ventas promedio", "Cada burbuja es un dominio; su tamaño es el número de micronegocios");
+      if (G.every((r) => Number.isFinite(r.personal_ocupado_promedio))) {
+        const maxN = Math.max(...G.map((r) => r.micronegocios));
+        grafico(3, [{
+          type: "scatter", mode: "markers+text", x: G.map((r) => r.personal_ocupado_promedio), y: G.map((r) => r.ventas_promedio_mes_millones),
+          text: G.map((r) => corto(r.dominio, 22)),
+          textposition: G.map((r) => (G.some((o) => o !== r && Math.abs(o.personal_ocupado_promedio - r.personal_ocupado_promedio) < 0.06 &&
+            o.ventas_promedio_mes_millones > r.ventas_promedio_mes_millones && o.ventas_promedio_mes_millones - r.ventas_promedio_mes_millones < 0.8)
+            ? "bottom center" : "top center")), cliponaxis: false, textfont: { size: 10, color: css("--text-secondary") },
+          customdata: G.map((r) => [r.dominio, entero(r.micronegocios)]),
+          marker: { color: css("--s1"), opacity: 0.8, size: G.map((r) => 10 + 34 * Math.sqrt(r.micronegocios / maxN)),
+            line: { color: css("--surface-1"), width: 2 } },
+          hovertemplate: "<b>%{customdata[0]}</b><br>Personas por negocio: %{x:.2f}<br>Ventas: $%{y:,.2f} millones<br>Negocios: %{customdata[1]}<extra></extra>",
+        }], layout({ xaxis: eje("Personas ocupadas por micronegocio"), yaxis: eje("Ventas promedio (millones al mes)"),
+          margin: { l: 10, r: 60, t: 24, b: 10 } }));
+      } else sinGrafico(3, "El archivo no trae personal_ocupado_promedio.");
+
+      tarjeta(4, "Composición de las ventas promedio", "Consumo intermedio + valor agregado = ventas (millones de pesos al mes)");
+      if (G.every((r) => Number.isFinite(r.consumo_intermedio_promedio_mes_millones) && Number.isFinite(r.valor_agregado_promedio_mes_millones))) {
+        const cats = porV.map((r) => corto(r.dominio));
+        $("g4").style.height = Math.max(360, 26 * cats.length + 110) + "px";
+        const [c1, c2] = PALETA();
+        grafico(4, [
+          { type: "bar", orientation: "h", name: "Consumo intermedio", y: cats, x: porV.map((r) => r.consumo_intermedio_promedio_mes_millones),
+            marker: { color: c1, line: { color: css("--surface-1"), width: 2 } }, customdata: porV.map((r) => r.dominio),
+            hovertemplate: "<b>%{customdata}</b><br>Consumo intermedio: $%{x:,.2f} millones<extra></extra>" },
+          { type: "bar", orientation: "h", name: "Valor agregado", y: cats, x: porV.map((r) => r.valor_agregado_promedio_mes_millones),
+            marker: { color: c2, line: { color: css("--surface-1"), width: 2 } }, customdata: porV.map((r) => r.dominio),
+            hovertemplate: "<b>%{customdata}</b><br>Valor agregado: $%{x:,.2f} millones<extra></extra>" },
+        ], layout({ barmode: "stack", bargap: 0.35, yaxis: eje("", { autorange: "reversed", gridcolor: "rgba(0,0,0,0)" }),
+          xaxis: eje("Millones de pesos al mes"), margin: { l: 10, r: 24, t: 30, b: 10 },
+          legend: { orientation: "h", y: 1.02, yanchor: "bottom", x: 0, traceorder: "normal", font: { color: css("--text-primary") } } }));
+      } else sinGrafico(4, "El archivo no trae consumo intermedio y valor agregado promedio.");
+
+      $("pie").textContent = `Fuente: ${E.nombre}. Promedios = totales del DANE ÷ número de micronegocios; ventas anuales ÷ 12.` +
+        (conIC ? " IC 95 % aproximado (conservador)." : "");
+    },
+  };
+
+  // =====================================================================
+  // MODO 3: cualquier tabla (incluye microdatos tipo datos_emicron.csv)
+  // =====================================================================
+  const general = {
+    preparar() {
+      const info = {};
+      for (const c of E.cols) {
+        const vals = E.filas.map((r) => r[c]).filter((v) => !vacio(v));
+        const nums = vals.map(numero).filter(Number.isFinite);
+        const esNum = vals.length > 0 && nums.length / vals.length >= 0.9;
+        const sn = vals.length > 0 && vals.every((v) => siNo(v));
+        const distintos = unicos(vals.map((v) => String(v).trim())).length;
+        const escala = esNum && mediana(nums.map(Math.abs)) >= 1e5 ? 1e6 : 1;
+        info[c] = { esNum: esNum && !sn, esCat: !esNum || sn || distintos <= 12, sn, distintos, escala };
+      }
+      E.info = info;
+      E.nums = E.cols.filter((c) => info[c].esNum);
+      E.cats = E.cols.filter((c) => info[c].esCat && info[c].distintos <= 60 && info[c].distintos >= 2);
+      const pref = (lista, ...nombres) => nombres.find((n) => lista.includes(n));
+      E.sel.gCat = pref(E.cats, "sector") || E.cats.find((c) => !info[c].esNum) || E.cats[0] || "";
+      E.sel.gNum = pref(E.nums, "ventas_mes") || E.nums[0] || "";
+      E.sel.gNum2 = pref(E.nums, "meses_antiguedad") || E.nums.find((c) => c !== E.sel.gNum) || E.sel.gNum;
+      E.sel.gColor = pref(E.cats, "usa_internet") || E.cats.find((c) => c !== E.sel.gCat && info[c].distintos <= 8) || "";
+
+      const etiqueta = (c) => c + (info[c].escala > 1 ? " (millones)" : "");
+      $("formato").innerHTML = `Formato detectado: <b>tabla general</b> — ${entero(E.filas.length)} filas, ` +
+        `${E.nums.length} columnas numéricas y ${E.cats.length} de categorías. Elige qué graficar:`;
+      const ninguno = [["", "(ninguno)"]];
+      $("controles").innerHTML =
+        (E.cats.length ? control("gCat", "Agrupar por (categoría)", E.cats.map((c) => [c, c]), E.sel.gCat) : "") +
+        (E.nums.length ? control("gNum", "Variable numérica", E.nums.map((c) => [c, etiqueta(c)]), E.sel.gNum) : "") +
+        (E.nums.length ? control("gNum2", "Eje X de la dispersión", E.nums.map((c) => [c, etiqueta(c)]), E.sel.gNum2) : "") +
+        control("gColor", "Color / comparar por", ninguno.concat(E.cats.map((c) => [c, c])), E.sel.gColor);
+      enlazar(["gCat", "gNum", "gNum2", "gColor"].filter((id) => $(id)));
+      if (!E.nums.length) mostrar("aviso", "No se encontraron columnas numéricas: solo se muestran conteos.");
+    },
+    valorCat(c, v) { return E.info[c].sn ? siNo(v) : String(v ?? "").trim(); },
+    dibujar() {
+      resetAlturas();
+      const { gCat: cat, gNum: num, gNum2: num2, gColor: colr } = E.sel;
+      const esc1 = num ? E.info[num].escala : 1, esc2 = num2 ? E.info[num2].escala : 1;
+      const uni = (c, e) => c + (e > 1 ? " (millones)" : "");
+      let omitidas = 0;
+      const D = E.filas.map((r) => ({
+        cat: cat ? this.valorCat(cat, r[cat]) : "", col: colr ? this.valorCat(colr, r[colr]) : "",
+        y: num ? numero(r[num]) / esc1 : NaN, x: num2 ? numero(r[num2]) / esc2 : NaN,
+      }));
+      const conY = D.filter((d) => Number.isFinite(d.y));
+      if (num) omitidas = D.length - conY.length;
+      mostrar("aviso", omitidas ? `${omitidas} filas sin valor numérico válido en "${num}" se omiten en los gráficos de esa variable.` : (E.nums.length ? "" : $("aviso").textContent));
+
+      // categorías de color en orden fijo (Sí/No primero si aplica); más de 8 → "Otros"
+      let grupos = colr ? unicos(D.map((d) => d.col).filter(Boolean)) : [];
+      if (colr && E.info[colr].sn) grupos = ["Sí", "No"].filter((g) => grupos.includes(g));
+      else grupos.sort((a, b) => a.localeCompare(b, "es"));
+      if (grupos.length > 8) { const top = grupos.slice(0, 7); D.forEach((d) => { if (d.col && !top.includes(d.col)) d.col = "Otros"; }); grupos = [...top, "Otros"]; }
+      const pal = PALETA(), colorDe = (g) => (g === "Otros" ? css("--otros") : pal[grupos.indexOf(g) % 8]);
+      const nombreGrupo = (g) => (colr === "usa_internet" ? (g === "Sí" ? "Usa internet" : g === "No" ? "No usa internet" : g) : g);
+
+      const ys = conY.map((d) => d.y);
+      const tercer = colr && grupos.length
+        ? [fmt((100 * D.filter((d) => d.col === grupos[0]).length) / D.length, 1) + " %", `${colr} = ${grupos[0]}`]
+        : [String(E.cols.length), "Columnas"];
+      kpis([
+        [entero(D.length), "Filas"],
+        [num && ys.length ? fmt(media(ys)) : "–", num ? `Media de ${uni(num, esc1)}` : "Media"],
+        [num && ys.length ? fmt(mediana(ys)) : "–", num ? `Mediana de ${uni(num, esc1)}` : "Mediana"],
+        tercer,
+      ]);
+
+      // 1. promedio por categoría
+      tarjeta(1, num && cat ? `Promedio de ${num} por ${cat}` : "Promedio por categoría", num ? uni(num, esc1) : "");
+      if (num && cat) {
+        const g = {}; conY.forEach((d) => d.cat && (g[d.cat] ??= []).push(d.y));
+        const cs = Object.keys(g).sort((a, b) => media(g[b]) - media(g[a]));
+        const m = cs.map((c) => media(g[c]));
+        barrasH(1, cs, m, { texto: m.map((v) => fmt(v)), ejeX: uni(num, esc1),
+          rango: [Math.min(0, ...m) * 1.2, Math.max(0, ...m) * 1.2],
+          hover: cs.map((c) => `<b>%{customdata}</b><br>Promedio: %{x:,.2f}<br>Filas: ${g[c].length}<extra></extra>`) });
+      } else sinGrafico(1, "Se necesita una columna de categorías y una numérica.");
+
+      // 2. % de filas por categoría
+      tarjeta(2, cat ? `Distribución por ${cat}` : "Distribución", "Porcentaje de filas");
+      if (cat) {
+        const cnt = {}; D.forEach((d) => d.cat && (cnt[d.cat] = (cnt[d.cat] || 0) + 1));
+        const cs = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+        const tot = cs.reduce((s, c) => s + cnt[c], 0), p = cs.map((c) => (100 * cnt[c]) / tot);
+        barrasH(2, cs, p, { texto: p.map((v) => fmt(v, 1) + " %"), ejeX: "% de filas", rango: [0, Math.max(...p) * 1.2],
+          hover: cs.map((c) => `<b>%{customdata}</b><br>%{x:.1f} %<br>${cnt[c]} de ${tot} filas<extra></extra>`) });
+      } else sinGrafico(2, "No hay columnas de categorías para contar.");
+
+      // 3. dispersión
+      tarjeta(3, num && num2 ? `${num2} frente a ${num}` : "Dispersión", colr ? `Color según ${colr}` : "Cada punto es una fila");
+      const pts = D.filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y));
+      if (num && num2 && pts.length) {
+        const series = colr && grupos.length ? grupos : [""];
+        grafico(3, series.map((s) => {
+          const sub = s ? pts.filter((d) => d.col === s) : pts;
+          return { type: "scatter", mode: "markers", name: nombreGrupo(s) || num, x: sub.map((d) => d.x), y: sub.map((d) => d.y),
+            customdata: sub.map((d) => d.cat), marker: { color: s ? colorDe(s) : pal[0], size: 9, opacity: 0.85, line: { color: css("--surface-1"), width: 1.5 } },
+            hovertemplate: `${esc(num2)}: %{x:,.2f}<br>${esc(num)}: %{y:,.2f}` + (cat ? "<br>%{customdata}" : "") + `<extra>${esc(nombreGrupo(s))}</extra>` };
+        }), layout({ xaxis: eje(uni(num2, esc2)), yaxis: eje(uni(num, esc1)), hovermode: "closest", showlegend: series.length > 1 }));
+      } else sinGrafico(3, "Se necesitan dos columnas numéricas.");
+
+      // 4. caja
+      const por = colr && grupos.length ? "col" : "cat";
+      const etiquetaPor = por === "col" ? colr : cat;
+      tarjeta(4, num ? `Distribución de ${num}${etiquetaPor ? " por " + etiquetaPor : ""}` : "Diagrama de caja",
+        "Caja: cuartiles; línea continua: mediana; punteada: media");
+      if (num && conY.length) {
+        const niveles = por === "col" ? grupos : unicos(conY.map((d) => d.cat).filter(Boolean)).slice(0, 12);
+        const lista = niveles.length ? niveles : [""];
+        grafico(4, lista.map((g, i) => {
+          const c = por === "col" ? colorDe(g) : pal[0];
+          return { type: "box", name: nombreGrupo(g) || num, y: (g ? conY.filter((d) => d[por] === g) : conY).map((d) => d.y),
+            marker: { color: c, size: 5 }, line: { color: c, width: 2 }, fillcolor: "rgba(0,0,0,0)", boxmean: true, boxpoints: "outliers",
+            hovertemplate: "%{y:,.2f}<extra></extra>" };
+        }), layout({ yaxis: eje(uni(num, esc1)), showlegend: false }));
+      } else sinGrafico(4, "Se necesita una columna numérica.");
+
+      $("pie").textContent = `Fuente: ${E.nombre} (${entero(D.length)} filas).` +
+        (esc1 > 1 || esc2 > 1 ? " Las columnas con valores grandes se muestran en millones." : "");
+    },
+  };
+
+  const MODOS = { frecuencias, economico, general };
+  function dibujar() { if (E.tipo) MODOS[E.tipo].dibujar(); }
+
+  // =====================================================================
+  // Eventos
+  // =====================================================================
+  zona.addEventListener("click", () => input.click());
+  zona.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  input.addEventListener("change", () => { leer(input.files[0]); input.value = ""; });
+  ["dragenter", "dragover"].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("arrastrando"); }));
+  ["dragleave", "drop"].forEach((ev) => zona.addEventListener(ev, (e) => { e.preventDefault(); zona.classList.remove("arrastrando"); }));
+  zona.addEventListener("drop", (e) => leer(e.dataTransfer.files[0]));
+  ["dragover", "drop"].forEach((ev) => window.addEventListener(ev, (e) => e.preventDefault()));
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", dibujar);
+
+  if (!window.Papa || !window.Plotly) {
+    mostrar("error", "No se pudieron cargar PapaParse o Plotly.js. El tablero necesita conexión a internet al abrirse.");
+  }
+  // Gancho para pruebas automáticas: window.__cargarTexto(csv, nombre)
+  window.__cargarTexto = (texto, nombre = "prueba.csv") => {
+    E.nombre = nombre;
+    procesar(Papa.parse(texto, { header: true, skipEmptyLines: "greedy", delimitersToGuess: [",", ";", "\t", "|"],
+      transformHeader: (h) => h.replace(/^﻿/, "").trim() }));
+  };
+})();
+</script>
+</body>
+</html>

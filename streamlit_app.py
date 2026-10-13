@@ -6,7 +6,6 @@ import re
 
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -270,17 +269,13 @@ if modelo and st.session_state.get("selector_actual") == config_actual:
 
     col_g1, col_g2 = st.columns(2)
     with col_g1:
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=modelo["pred"], y=modelo["obs"], mode="markers", name="Observaciones"))
-        limites = [float(min(np.min(modelo["pred"]), np.min(modelo["obs"]))), float(max(np.max(modelo["pred"]), np.max(modelo["obs"]))) ]
-        fig.add_trace(go.Scatter(x=limites, y=limites, mode="lines", name="Predicción perfecta", line={"dash": "dash"}))
-        fig.update_layout(title="Observado frente a predicho", xaxis_title="Predicho", yaxis_title="Observado", height=390)
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("#### Observado frente a predicho")
+        grafico_obs = pd.DataFrame({"Predicho": modelo["pred"], "Observado": modelo["obs"]})
+        st.scatter_chart(grafico_obs, x="Predicho", y="Observado", height=390)
     with col_g2:
-        fig_res = go.Figure(go.Scatter(x=modelo["pred"], y=modelo["residuos"], mode="markers", name="Residuos"))
-        fig_res.add_hline(y=0, line_dash="dash")
-        fig_res.update_layout(title="Residuos", xaxis_title="Valor predicho", yaxis_title="Observado − predicho", height=390)
-        st.plotly_chart(fig_res, use_container_width=True)
+        st.markdown("#### Residuos")
+        grafico_residuos = pd.DataFrame({"Predicho": modelo["pred"], "Residuo": modelo["residuos"]})
+        st.scatter_chart(grafico_residuos, x="Predicho", y="Residuo", height=390)
 
     st.subheader("Predecir nuevos valores")
     with st.form("formulario_prediccion"):
